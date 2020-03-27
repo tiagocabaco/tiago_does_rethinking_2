@@ -1,0 +1,301 @@
+---
+title: "Chapter 2 - Small Worlds and Large Worlds"
+subtitle: "Chapter code and examples"
+author: "Tiago"
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_html: default
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+library(tidyverse)
+```
+
+## Section 2.4.3 - Grid Approximation
+
+### Building a grid approximation in R for the globe tossing problem 
+
+The goal is to compute the posterior probability of probability of our right 
+index finger water lands in water when we throw the globe to air. 
+
+The first nine samples are 
+
+$$
+W \ L \ W \ W \ W \ L \ W \ L \ W
+$$
+
+So in our data we landed our right index on water $6$ times in $9$ throws. 
+
+### Model specification 
+
+$$
+W \sim Binomial(N, p)
+$$
+$$
+p \sim Uniform(0,1)
+$$
+Since, $p$ has uniform prior between $0$ and $1$, then 
+
+$$
+Pr(p) = \frac{1}{1-0} = 1
+$$
+
+### Grid approximation of the posterior distribution
+
+The recipe is the following
+
+1. Define a grid with the number of points I want to estimate the posterior;
+
+2. Compute the prior at each parameter value on the grid;
+
+3. Compute the likelihood at each parameter value
+
+4. Compute the unstandardized posterior values by multiplying 
+`likelihood * prior`.
+
+5. Standardize the posterior distribution by multiplying by the sum of all values.
+
+Here it is what it looks like in R
+
+```{r}
+# number of grid points
+n_points <- 20
+
+# Define a grid
+p_grid <- seq( from = 0, to  = 1, length.out = n_points)
+
+# define prior
+prior <- rep(1, n_points)
+
+# compute likelihood at each grid point
+likelihood <- dbinom(6, size = 9, prob = p_grid)
+
+# compute joing probability of data and parameters
+# that is, the product of likelihood and prior
+unstd.posterior <- likelihood * prior
+
+# standardize the posterior, so it sums to one
+posterior <- unstd.posterior / sum(unstd.posterior)
+
+# save grid and posterior into a data frame
+dgrid <- 
+  tibble(
+    p_grid, 
+    posterior
+  )
+```
+
+#### Ploting posterior grid approximation of $p$
+
+```{r}
+dgrid %>% 
+  ggplot(aes(x = p_grid, y = posterior)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(
+    title = "Posterior approximation of p using 20 grid points"
+  )
+```
+
+### We can try with different numbers of grid points
+
+```{r}
+n_points <- c(3,10, 20, 100, 400, 1000) 
+
+dgrid <- map_dfr(n_points, function(points){
+  
+  # Define a grid
+  p_grid <- seq( from = 0, to  = 1, length.out = points)
+  
+  # define prior
+  prior <- rep(1, points)
+  
+  # compute likelihood at each grid point
+  likelihood <- dbinom(6, size = 9, prob = p_grid)
+  
+  # compute joing probability of data and parameters
+  # that is, the product of likelihood and prior
+  unstd.posterior <- likelihood * prior
+  
+  # standardize the posterior, so it sums to one
+  posterior <- unstd.posterior / sum(unstd.posterior)
+  
+  # save grid and posterior into a data frame
+  dgrid <- 
+    tibble(
+      grid_points = as.character(points),
+      p_grid, 
+      posterior
+    ) 
+  return(dgrid)
+}) %>% 
+  mutate(grid_points = factor(grid_points, levels = n_points))
+```
+
+#### Ploting the posteriro approximation of $p$
+
+```{r}
+dgrid %>% 
+  ggplot(aes(x = p_grid, y = posterior)) +
+  geom_line() +
+  geom_point(aes(color = grid_points)) +
+  labs(
+    title = "Posterior grid approximations with varying numbers of grid points"
+  ) +
+  facet_wrap(~ grid_points, scales = "free_y") +
+  theme_minimal() +
+  theme(legend.position = "none")
+  
+```
+
+### Now with different priors
+
+#### Step function prior
+
+```{r}
+step_prior <- function(p_grid) { 
+  prior <- ifelse(p_grid < 0.5, 0, 1)
+  return(prior)
+  }
+```
+
+```{r echo=FALSE}
+n_points <- 50
+
+# Define a grid
+p_grid <- seq( from = 0, to  = 1, length.out = n_points)
+
+tibble(
+  p_grid
+) %>% 
+  mutate(prior = step_prior(p_grid)) %>% 
+  ggplot(aes(x = p_grid, y = prior)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "Prior probability of parameter p"
+  )
+
+```
+
+#### Approximating the posterior
+
+```{r}
+# number of grid points
+n_points <- 20
+
+# Define a grid
+p_grid <- seq( from = 0, to  = 1, length.out = n_points)
+
+# define prior
+prior <- step_prior(p_grid)
+
+# compute likelihood at each grid point
+likelihood <- dbinom(6, size = 9, prob = p_grid)
+
+# compute joing probability of data and parameters
+# that is, the product of likelihood and prior
+unstd.posterior <- likelihood * prior
+
+# standardize the posterior, so it sums to one
+posterior <- unstd.posterior / sum(unstd.posterior)
+
+# save grid and posterior into a data frame
+dgrid <- 
+  tibble(
+    p_grid, 
+    posterior
+  )
+
+dgrid %>% 
+  ggplot(aes(x = p_grid, y = posterior)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(
+    title = "Posterior approximation of p using 20 grid points"
+  )
+```
+
+#### Double exponential prior
+
+```{r}
+dbl_exp <- function(p_grid) { 
+  prior <- exp(-5*abs(p_grid - .5))
+  return(prior)
+  }
+```
+
+```{r echo=FALSE}
+n_points <- 50
+
+# Define a grid
+p_grid <- seq( from = 0, to  = 1, length.out = n_points)
+
+tibble(
+  p_grid
+) %>% 
+  mutate(prior = dbl_exp(p_grid)) %>% 
+  ggplot(aes(x = p_grid, y = prior)) +
+  geom_line() +
+  theme_minimal() +
+  labs(
+    title = "Prior probability of parameter p"
+  )
+
+```
+
+#### Approximating the posterior
+
+```{r}
+# number of grid points
+n_points <- 20
+
+# Define a grid
+p_grid <- seq( from = 0, to  = 1, length.out = n_points)
+
+# define prior
+prior <- dbl_exp(p_grid)
+
+# compute likelihood at each grid point
+likelihood <- dbinom(6, size = 9, prob = p_grid)
+
+# compute joing probability of data and parameters
+# that is, the product of likelihood and prior
+unstd.posterior <- likelihood * prior
+
+# standardize the posterior, so it sums to one
+posterior <- unstd.posterior / sum(unstd.posterior)
+
+# save grid and posterior into a data frame
+dgrid <- 
+  tibble(
+    p_grid, 
+    posterior
+  )
+
+dgrid %>% 
+  ggplot(aes(x = p_grid, y = posterior)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(
+    title = "Posterior approximation of p using 20 grid points"
+  )
+
+
+```
+
+
+
