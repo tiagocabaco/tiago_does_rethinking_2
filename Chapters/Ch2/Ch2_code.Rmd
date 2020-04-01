@@ -19,6 +19,7 @@ library(tufte)
 knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
 options(htmltools.dir.version = FALSE)
 library(tidyverse)
+library(rethinking)
 ```
 
 ## Section 2.4.3 - Grid Approximation
@@ -156,7 +157,7 @@ dgrid %>%
   facet_wrap(~ grid_points, scales = "free_y") +
   theme_minimal() +
   theme(legend.position = "none")
-  
+
 ```
 
 ### Now with different priors
@@ -167,7 +168,7 @@ dgrid %>%
 step_prior <- function(p_grid) { 
   prior <- ifelse(p_grid < 0.5, 0, 1)
   return(prior)
-  }
+}
 ```
 
 ```{r echo=FALSE}
@@ -234,7 +235,7 @@ dgrid %>%
 dbl_exp <- function(p_grid) { 
   prior <- exp(-5*abs(p_grid - .5))
   return(prior)
-  }
+}
 ```
 
 ```{r echo=FALSE}
@@ -298,4 +299,38 @@ dgrid %>%
 ```
 
 
+## Section 2.4.4 Quadratic approximation
+
+```{r}
+W <- 6
+L <- 3
+
+globe.qa <- quap(
+  alist(
+    W  ~ dbinom(W+L, p), 
+    p ~ dunif(0, 1)
+  ), 
+  data = list(W = W, L = L)
+)
+
+precis(globe.qa)
+```
+
+
+```{r}
+parameter_vals <- seq(from = 0, to = 1, by = .01)
+tibble(
+  p = seq(0, 1, by = .01),
+  analytic = dbeta(parameter_vals, W + 1, L + 1),
+  quap = dnorm(parameter_vals, .67, .16),
+) %>% 
+  pivot_longer(c(analytic, quap), 
+               names_to = "estimation", 
+               values_to = "posterior") %>% 
+  ggplot(aes(x = p, y = posterior, color = estimation)) +
+  geom_line(aes(linetype = estimation)) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
 
